@@ -1,0 +1,122 @@
+**Introduction**  
+This report seeks to build a model to predict the activity (output variable "classe") that was performed from a list of inputs collected from on-body sensors.  The inputs were collected from a group of six participants aged between 20 to 28, carrying out ten (10) repetitions of dumbbell curl for each of the five different variations identified by "classe".  
+
+Output variable: classe  
+- Categorical variable consisting of five (5) levels  
+A: According to specification  
+B: Throwing the elbows to the front   
+C: Lifting the dumbbell only halfway  
+D: Lowering the dumbbell only  
+E: Throwing the hips to the front  
+
+```{r, echo=FALSE}
+suppressWarnings(library(caret))
+suppressWarnings(library(AppliedPredictiveModeling))
+set.seed(327)
+
+## Load data
+training<-read.csv("pml-training.csv",header=TRUE)
+testing<-read.csv("pml-testing.csv",header=TRUE)
+```
+
+**Selection of features**  
+Relevant variables with descriptions of _roll, pitch, yaw, gyros, accel_  and _magnet_ are used as they are the information collected from the four _[Ref 3]_ sensors.  
+
+Within these variables, those that contains _"NA"_ or _"#DIV/0!"_ are removed from the   model as they offer no useful information for model building.  
+
+In addition, variables such as time stamps, windows or names of participants are removed as the model will be more useful for prediction of classe action from sensor information that is independent of time of the action performed and independent of the participants.  
+
+```{r, echo=TRUE}
+## Tidy dataset to select relevant information & features
+classe<-training[,grep("^classe",names(training))]
+roll<-training[,grep("^roll",names(training))]
+pitch<-training[,grep("^pitch",names(training))]
+yaw<-training[,grep("^yaw",names(training))]
+gyros<-training[,grep("^gyros",names(training))]
+acc<-training[,grep("^accel",names(training))]
+magnet<-training[,grep("^magnet",names(training))]
+training<-data.frame(classe,roll,pitch,yaw,gyros,acc,magnet)
+```
+
+**Model Building**  
+The simplified training data set (non relevant variables removed) partitioned with 70% used for training and 30% for testing.  
+
+```{r, echo=TRUE}
+## Create partition
+inTrain<-createDataPartition(training$classe,p = 0.7, list=FALSE)
+m_train<-training[inTrain,]
+m_test<-training[-inTrain,]
+```
+
+Following the strategy of Dr Max [Ref 2, Pg 25], a powerful model is selected to determine the initial performance and then followed by fitting the simplest possible model.  As such, random forest is used to determine the model.  
+
+```{r, echo=FALSE}
+suppressWarnings(library(randomForest))
+```
+
+```{r,echo=TRUE}
+## Use random forest to create model with automatic rerun using the 10 important
+## variables, mdim2nd =10
+
+rfFit<-randomForest(classe~.,data=m_train, imp=1, mdim2nd=10, impout=1)
+
+rfFit ## call out model
+
+## Test model against test samples using random forest model
+confusionMatrix(m_test$classe,predict(rfFit,m_test))
+
+```
+
+As per reference [4], there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error.
+
+```{r, echo=TRUE}
+## Use random forest to create model with automatic rerun using the 4 important
+## variables, mdim2nd =4
+rfFit3<-randomForest(classe~.,data=m_train, imp=1, mdim2nd=4, impout=1)
+
+rfFit3 ## call out model with 4 important variables
+
+## Test model against test samples using random forest model
+confusionMatrix(m_test$classe,predict(rfFit3,m_test))
+```
+
+By rule of parsimony, the model built with four important variables will be sufficient.  
+classe = roll_belt + yaw_belt + pitch_belt + magnet_dumbbell_z
+(Refer to Figure 1)
+
+```{r, echo=FALSE}
+## Prepare the 20 test set for prediction using built model
+roll<-testing[,grep("^roll",names(testing))]
+pitch<-testing[,grep("^pitch",names(testing))]
+yaw<-testing[,grep("^yaw",names(testing))]
+gyros<-testing[,grep("^gyros",names(testing))]
+acc<-testing[,grep("^accel",names(testing))]
+magnet<-testing[,grep("^magnet",names(testing))]
+testSet<-data.frame(roll,pitch,yaw,gyros,acc,magnet)
+```
+
+**Prediction using model**
+```{r,echo=TRUE}
+## Print out the results
+predict(rfFit,testSet)
+predict(rfFit3,testSet)
+```
+The above results have shown that the prediction is the same with the reduced model.  
+
+**References**   
+1) Dataset is obtained from the following website  
+   <http://groupware.les.inf.puc-rio.br/har#ixzz3PB9kU6tp>  
+   
+2) Predictive Modeling with R and the Caret Package by Max Kuhn, Ph.D  
+   <http://www.jstatsoft.org/v28/i05/>  
+
+3) Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable      Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+Cited by 2 (Google Scholar)  
+
+4) Random Forests by Leo Breiman and Adele Cutler  
+   <http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#workings>  
+   
+**Figure 1 showing the importance of variables**  
+```{r,echo=FALSE}
+varImpPlot(rfFit3)
+```
