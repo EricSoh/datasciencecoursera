@@ -1,0 +1,71 @@
+Predict the prices of diamonds in Singapore
+========================================================
+author: Eric Soh
+date: 18th Feb 15
+
+What sets the price?
+========================================================
+There is this "rule" stating that the value of a wedding ring must be at least 3 times of the groom's monthly salary.
+
+It will be interesting to know what characteristics of the diamond sets the price and hopefully the groom to be can use this as a reference.
+
+Data used is from Ecdat library package.
+
+```{r}
+library(Ecdat)
+data(Diamond)
+```
+
+The 4'C's - Men are clueless
+========================================================
+
+The variables of the data frame consists of the following
+- **Carat:**  
+  _weight of diamond in carat unit_
+- **Colour:**  
+  _factors of 6 levels with D being the best until I_
+- **Clarity:**  
+  _factors of 5 levels with IF being the best until VS2_
+- **Certification:**  
+  _certification body, a factor with levels - GIA, IGI, HRD_
+- **price:**  
+  _in Singapore dollars, which will be the output_
+
+Linear regression
+========================================================
+Fit linear model and using step to reduce the model.
+```{r}
+bestFit<-step(lm(price~.,data=Diamond),trace=0)
+```
+```{r echo=FALSE}
+a<-summary(bestFit)
+```
+```{r}
+a$r.squared
+```
+As seen in the above, `r round(a$r.squared*100,digits=1)` of the variation can be explained by the following:
+- carat  
+- colour  
+- clarity  
+
+
+Shiny app for prediction -server.R
+========================================================
+Data (i.e. carat, colour, clarity & certification) are retrieved from _ui.R_  
+and fed to _server.R_ for processing.  
+```{r eval=FALSE}
+## If submit button is pressed
+newdata<-reactive({
+    df<-data.frame(carat=input$carat,colour=input$colour,
+                   clarity=input$clarity, certification=input$cert)
+    return(df)
+    })
+```
+Prediction using _bestFit_ model shown in the previous slide.  
+```{r eval=FALSE}
+# Generate output - lower end
+output$lower <- renderPrint({
+    price<-predict(bestFit,newdata(),interval="confidence")
+    round(price[2],0) #round to the nearest unit place
+})
+```
